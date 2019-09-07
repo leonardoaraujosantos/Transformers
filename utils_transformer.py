@@ -69,6 +69,49 @@ class LayerNorm(nn.Module):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+    
+
+# Implement attention (Scaled Dot Product)
+def attention(query, key, value, dropout=None):
+    d_k = query.size(-1)
+    key = key.transpose(-2, -1)
+    scores = torch.matmul(query, key) / math.sqrt(d_k)
+    p_attn = F.softmax(scores, dim = -1)
+    if dropout is not None:
+        p_attn = dropout(p_attn)
+    attention_result = torch.matmul(p_attn, value)
+    return attention_result, p_attn
+
+    
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, h, hidden_size, linears=True, dropout=0.1):
+        super(MultiHeadedAttention, self).__init__()
+        assert hidden_size % h == 0
+        # We assume d_v always equals d_k
+        self.d_k = hidden_size // h
+        self.h = h
+        if linears: 
+            self.linears = clones(nn.Linear(hidden_size, hidden_size), 4)
+        else:
+            self.linears = [lambda arg: arg] * 4
+        self.attn = None
+        self.dropout = nn.Dropout(p=dropout)
+        
+    def forward(self, query, key, value):
+        nbatches = query.size(0)
+        
+        # 1) Do all the linear projections in batch from hidden_size => h x d_k 
+        query, key, value = [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2) for l, x in zip(self.linears, (query, key, value))]
+        
+        # 2) Apply attention on all the projected vectors in batch. 
+        x, self.attn = attention(query, key, value, self.dropout)
+        
+        # 3) "Concat" using a view and apply a final linear. 
+        x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
+        
+        # Get result from last linear
+        x = self.linears[-1](x)
+        return x
 
 
 class Batch:
