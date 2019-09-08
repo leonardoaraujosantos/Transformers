@@ -157,13 +157,16 @@ def make_model(src_vocab, tgt_vocab, N=6,
     return model
 
 
+# Generate random data where source and targets are the same
+# ex: batch = next(iter(data_gen(5, 4, 20)))
 def data_gen(V, batch, nbatches):
-    "Generate random data for a src-tgt copy task."
     for i in range(nbatches):
         data = torch.from_numpy(np.random.randint(1, V, size=(batch, 10)))
         data[:, 0] = 1
         src = data
         tgt = data
+        
+        # yield is the return for a generator in python
         yield Batch(src, tgt, 0)
 
         
